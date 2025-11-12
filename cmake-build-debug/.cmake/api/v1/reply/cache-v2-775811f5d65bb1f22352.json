@@ -199,11 +199,11 @@
 				},
 				{
 					"name" : "HELPSTRING",
-					"value" : "C compiler"
+					"value" : "No help, variable specified on the command line."
 				}
 			],
-			"type" : "STRING",
-			"value" : "C:/Program Files/JetBrains/CLion 2024.3.4/bin/mingw/bin/gcc.exe"
+			"type" : "UNINITIALIZED",
+			"value" : "gcc.exe"
 		},
 		{
 			"name" : "CMAKE_C_COMPILER_AR",

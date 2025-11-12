@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "utils.h"
+#include "graph_analysis.h"
 
 int main(int argc, char* argv[])
 {
@@ -96,16 +97,54 @@ int main(int argc, char* argv[])
     generate_mermaid_file(graph, output_filename);
     
     printf("\n========================================\n");
-    printf("  All steps completed!\n");
+    printf("  Steps 1 to 3 completed!\n");
     printf("========================================\n");
     printf("\nTo visualize the graph:\n");
     printf("1. Open https://www.mermaidchart.com/\n");
     printf("2. Copy the contents of '%s'\n", output_filename);
     printf("3. Paste into the Mermaid code editor\n");
     printf("4. View your graph!\n\n");
-    
-    // Free the memory we allocated
+
+    printf("STEP 4: Grouping vertices into strongly connected classes (Tarjan)...\n");
+    printf("------------------------------------------------------------------\n");
+
+    int* vertex_to_class = NULL;
+    t_partition partition = tarjan_partition_graph(&graph, &vertex_to_class);
+    print_partition(&partition);
+
+    printf("STEP 5: Building class links and Hasse diagram...\n");
+    printf("-----------------------------------------------\n");
+
+    t_link_array direct_links = build_link_array(&partition, &graph, vertex_to_class);
+    print_link_array(&direct_links, &partition);
+
+    t_link_array hasse_links = clone_link_array(&direct_links);
+    removeTransitiveLinks(&hasse_links);
+
+    char hasse_filename[256];
+    snprintf(hasse_filename, sizeof(hasse_filename), "classes_%s", output_filename);
+    export_hasse_mermaid(&partition, &hasse_links, hasse_filename);
+
+    printf("\nSTEP 6: Analysing class and graph properties...\n");
+    printf("----------------------------------------------\n");
+
+    graph_characteristics characteristics = compute_graph_characteristics(&partition, &direct_links);
+    print_graph_characteristics(&partition, &characteristics);
+
+    printf("\n========================================\n");
+    printf("  Part 2 analysis completed!\n");
+    printf("========================================\n\n");
+
+
+
+    free(vertex_to_class);
+    free_link_array(&direct_links);
+    free_link_array(&hasse_links);
+    free_partition(&partition);
+    free_graph_characteristics(&characteristics);
     free_adjacency_list(&graph);
-    
+
+    printf("Program finished.\n\n");
+
     return 0;
 }
