@@ -3,6 +3,7 @@
 #include <string.h>
 #include "utils.h"
 #include "graph_analysis.h"
+#include "matrix.h"
 
 int main(int argc, char* argv[])
 {
@@ -135,7 +136,208 @@ int main(int argc, char* argv[])
     printf("  Part 2 analysis completed!\n");
     printf("========================================\n\n");
 
-
+    // ========================================
+    // PART 3: Matrix calculations and distributions
+    // ========================================
+    
+    printf("\n========================================\n");
+    printf("  Markov Graph Project - Part 3\n");
+    printf("========================================\n\n");
+    
+    // STEP 1: Matrix calculations
+    printf("STEP 1: Matrix calculations...\n");
+    printf("-------------------------------\n");
+    
+    // Create the transition probability matrix from the graph
+    printf("Creating transition probability matrix M...\n");
+    t_matrix M = createTransitionMatrix(&graph);
+    printf("Transition matrix M:\n");
+    printMatrix(M);
+    
+    // Calculate M^3
+    printf("Calculating M^3...\n");
+    t_matrix M_power = createEmptyMatrix(graph.num_vertices);
+    t_matrix M_temp = createEmptyMatrix(graph.num_vertices);
+    t_matrix M_result = createEmptyMatrix(graph.num_vertices);
+    
+    // Start with M^1
+    copyMatrix(M_power, M);
+    
+    // Calculate M^2 = M * M
+    multiplyMatrices(M_power, M, M_result);
+    copyMatrix(M_temp, M_result);
+    
+    // Calculate M^3 = M^2 * M
+    multiplyMatrices(M_temp, M, M_result);
+    copyMatrix(M_power, M_result);
+    
+    printf("Matrix M^3:\n");
+    printMatrix(M_power);
+    
+    // Calculate M^7
+    printf("Calculating M^7...\n");
+    // We already have M^3, so we need M^4, M^5, M^6, M^7
+    // M^4 = M^3 * M
+    multiplyMatrices(M_power, M, M_result);
+    copyMatrix(M_power, M_result);
+    // M^5 = M^4 * M
+    multiplyMatrices(M_power, M, M_result);
+    copyMatrix(M_power, M_result);
+    // M^6 = M^5 * M
+    multiplyMatrices(M_power, M, M_result);
+    copyMatrix(M_power, M_result);
+    // M^7 = M^6 * M
+    multiplyMatrices(M_power, M, M_result);
+    copyMatrix(M_power, M_result);
+    
+    printf("Matrix M^7:\n");
+    printMatrix(M_power);
+    
+    // Find convergence: calculate M^n until difference between M^n and M^(n-1) < epsilon
+    printf("Finding convergence (difference < 0.01)...\n");
+    float epsilon = 0.01f;
+    int n = 1;
+    t_matrix M_prev = createEmptyMatrix(graph.num_vertices);
+    copyMatrix(M_prev, M);
+    copyMatrix(M_power, M);
+    
+    float diff = 1.0f;
+    int max_iterations = 100;  // Safety limit to avoid infinite loops
+    
+    while (diff > epsilon && n < max_iterations)
+    {
+        // Calculate next power: M_power = M_power * M
+        multiplyMatrices(M_power, M, M_result);
+        copyMatrix(M_temp, M_power);  // Save current M_power before updating
+        copyMatrix(M_power, M_result);  // Update M_power to next power
+        
+        // Calculate difference between M^n and M^(n-1)
+        diff = matrixDifference(M_power, M_temp);
+        
+        // Update for next iteration
+        copyMatrix(M_prev, M_power);
+        n++;
+    }
+    
+    if (n < max_iterations)
+    {
+        printf("Convergence reached at M^%d (difference = %.6f)\n", n, diff);
+        printf("Converged matrix M^%d:\n", n);
+        printMatrix(M_power);
+    }
+    else
+    {
+        printf("Warning: Convergence not reached after %d iterations (difference = %.6f)\n", 
+               max_iterations, diff);
+        printf("This graph may not have a stationary distribution.\n");
+    }
+    
+    // STEP 2: Properties of Markov graphs - Stationary distributions
+    printf("\nSTEP 2: Calculating stationary distributions for each class...\n");
+    printf("------------------------------------------------------------\n");
+    
+    // For each persistent class, calculate the stationary distribution
+    for (int i = 0; i < partition.class_count; i++)
+    {
+        if (characteristics.class_is_persistent[i])
+        {
+            printf("\nClass %s (persistent):\n", partition.classes[i].name);
+            
+            // Extract submatrix for this class
+            t_matrix sub = subMatrix(M, partition, i);
+            printf("Submatrix for class %s:\n", partition.classes[i].name);
+            printMatrix(sub);
+            
+            // Calculate powers until convergence
+            t_matrix sub_power = createEmptyMatrix(sub.rows);
+            t_matrix sub_result = createEmptyMatrix(sub.rows);
+            t_matrix sub_prev = createEmptyMatrix(sub.rows);
+            
+            copyMatrix(sub_power, sub);
+            copyMatrix(sub_prev, sub);
+            
+            float sub_diff = 1.0f;
+            int sub_n = 1;
+            
+            while (sub_diff > epsilon && sub_n < max_iterations)
+            {
+                multiplyMatrices(sub_power, sub, sub_result);
+                copyMatrix(sub_prev, sub_power);
+                copyMatrix(sub_power, sub_result);
+                
+                sub_diff = matrixDifference(sub_power, sub_prev);
+                sub_n++;
+            }
+            
+            if (sub_n < max_iterations)
+            {
+                printf("Stationary distribution for class %s (from row 0 of M^%d):\n", 
+                       partition.classes[i].name, sub_n);
+                printf("  ");
+                for (int j = 0; j < sub_power.cols; j++)
+                {
+                    printf("State %d: %.4f  ", partition.classes[i].members[j], sub_power.data[0][j]);
+                }
+                printf("\n");
+            }
+            else
+            {
+                printf("Warning: Could not find stationary distribution for class %s\n", 
+                       partition.classes[i].name);
+            }
+            
+            freeMatrix(&sub);
+            freeMatrix(&sub_power);
+            freeMatrix(&sub_result);
+            freeMatrix(&sub_prev);
+        }
+        else
+        {
+            printf("\nClass %s (transient): limiting distribution is zero\n", 
+                   partition.classes[i].name);
+        }
+    }
+    
+    // STEP 3 (bonus): Periodicity
+    printf("\nSTEP 3 (bonus): Calculating periods for each class...\n");
+    printf("------------------------------------------------------\n");
+    
+    for (int i = 0; i < partition.class_count; i++)
+    {
+        if (characteristics.class_is_persistent[i])
+        {
+            // Extract submatrix for this class
+            t_matrix sub = subMatrix(M, partition, i);
+            
+            // Calculate period
+            int period = getPeriod(sub);
+            
+            printf("Class %s: period = %d\n", partition.classes[i].name, period);
+            
+            if (period == 1)
+            {
+                printf("  -> This class is aperiodic (has a unique stationary distribution)\n");
+            }
+            else
+            {
+                printf("  -> This class is periodic with period %d\n", period);
+                printf("  -> It may have multiple periodic stationary distributions\n");
+            }
+            
+            freeMatrix(&sub);
+        }
+    }
+    
+    // Free matrix memory
+    freeMatrix(&M);
+    freeMatrix(&M_power);
+    freeMatrix(&M_temp);
+    freeMatrix(&M_result);
+    freeMatrix(&M_prev);
+    
+    printf("\n========================================\n");
+    printf("  Part 3 analysis completed!\n");
+    printf("========================================\n\n");
 
     free(vertex_to_class);
     free_link_array(&direct_links);
